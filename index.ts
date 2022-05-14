@@ -86,7 +86,8 @@ class PredicateExpression {
     this.jar.pointer.data = "<>";
     return this.setValue(value);
   }
-    
+
+   
 }
 
 class Expression {
@@ -103,7 +104,6 @@ class Expression {
     exp.right = nextExp;
     this.jar.pointer = nextExp;
     return new Where(this.jar);
-
   }
 
   and(){
@@ -114,6 +114,14 @@ class Expression {
     return this.createDeferredExpression("OR");
   }
 
+  andConcatSubExpression(expression: Expression){
+    this.and();
+    let subExp = expression.jar.root;
+    subExp.meta = 'sub-exp';
+    this.jar.pointer.left = subExp;
+    return new Expression(this.jar);
+  }
+
   andSubExpression(){
     this.and();
     let subExp = new N('deferred', this.jar.pointer);
@@ -122,15 +130,32 @@ class Expression {
     this.jar.pointer = subExp;
     return new Where(this.jar);
   }
+
+  terminate(){
+      this.jar.pointer = this.jar.pointer.parent.parent;
+      return new Expression(this.jar);
+  }
+}
+
+class WhereSubExpression extends Where{
+  constructor(jar){
+    super(jar);
+  }
 }
 
 
+const sub = new FluentJar().init()
+  .field("one").equals("two")
+  .or().field("fdsa").equals("fice");
 
 const foo = new FluentJar().init()
   .field("foo").equals("Bar")
   .andSubExpression()
-     .field("one").equals("two")
-     .or().field("fdsa").equals("fice");
+    .field("one").equals("two")
+    .or().field("fdsa").equals("fice")
+  .terminate()
+  .and().field('dsa').isNotEqualTo("fdas")
+  .andConcatSubExpression(sub);
 
 console.log(foo.jar.root);
 console.log(foo.jar.shatter());
