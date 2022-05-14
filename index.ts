@@ -5,8 +5,10 @@ class N {
   left: N;
   right: N;
   parent: N;
+  meta: string | null;
 
   constructor(data: NTypes, parent?: N) {
+    this.meta = null;
     this.data = data;
     this.left = null;
     this.right = null;
@@ -14,87 +16,125 @@ class N {
   }
 }
 
-const inOrder = (n: N) => {
-  if(n === null) {
-    return;
-  }
-  inOrder(n.left);
 
-  console.log(n.data);
+class FluentJar {
+  root: N = null;
+  pointer: N = null;
+  output = "";
 
-  inOrder(n.right)
-}
-
-
-
-let queue: Fluent[] = [];
-let root: N = null;
-let pointer: N = null;
-
-class Fluent {}
-class WhereJar extends Fluent {
-  field = (name: string) => {
-    root = new N('deferred');
-    pointer = root;
-    return new Where().field(name);
-  };
-}
-
-class Where extends Fluent {
-  field = (name: string) => {
-    let exp = new N('deferred', pointer);
-    pointer.left = exp;
-    let field = new N(name, exp);
-    exp.left = field;
-    pointer = exp;
-    return new Condition()
-  }
-}
-
-class Condition extends Fluent {
-  equals = () => {
-    pointer.data = "=";
-    return new Value();
-  }
-}
-
-class Value extends Fluent {
-  value = (value: string) => {
-    let nValue = new N(value, pointer);
-    pointer.right = nValue;
-    return new NextExpression();
-  }
-}
-
-class NextExpression extends Fluent {
-  and = () => {
-    let exp = pointer.parent;
-    exp.data = "AND";
-    let nextExp = new N('deferred', exp);
-    exp.right = nextExp;
-    pointer = nextExp;
-    return new Where();
+  shatter(){
+    this.inOrder(this.root);
+    return this.output;
   }
   
-  or = () => {
-    let exp = pointer.parent;
-    exp.data = "OR";
+  private inOrder(n: N){
+    if (n === null) {
+      return;
+    }
+    if(n.meta === 'sub-exp') this.output += "(";
+    this.inOrder(n.left);
+    if(n.data !== 'deferred') this.output += " " + n.data + " ";
+    this.inOrder(n.right);
+    if(n.meta === 'sub-exp') this.output += ")";
+  }
+
+  init(): Where {
+    this.root = new N('deferred');
+    this.pointer = this.root;
+    return new Where(this);
+  }
+}
+
+
+class Where{
+  jar: FluentJar;
+
+  constructor(jar: FluentJar){
+    this.jar = jar;
+  }
+
+  field(name: string){
+    let exp = new N('deferred',this.jar.pointer);
+    this.jar.pointer.left = exp;
+    let field = new N(name, exp);
+    exp.left = field;
+    this.jar.pointer = exp;
+    return new PredicateExpression(this.jar)
+  }
+}
+
+class PredicateExpression {
+  jar: FluentJar;
+
+  constructor(jar: FluentJar) {
+    this.jar = jar;
+  }
+
+  private setValue(value: string)
+  {
+    let nValue = new N(value, this.jar.pointer);
+    this.jar.pointer.right = nValue;
+    return new Expression(this.jar);
+  }
+
+  equals(value : string){
+    this.jar.pointer.data = "=";
+    return this.setValue(value);
+  }
+
+  isNotEqualTo(value: string){
+    this.jar.pointer.data = "<>";
+    return this.setValue(value);
+  }
+    
+}
+
+class Expression {
+  jar: FluentJar;
+
+  constructor(jar: FluentJar) {
+    this.jar = jar;
+  }
+  
+  private createDeferredExpression(value: string){
+    let exp = this.jar.pointer.parent;
+    exp.data = value;
     let nextExp = new N('deferred', exp);
     exp.right = nextExp;
-    pointer = nextExp;
-    return new Where();
+    this.jar.pointer = nextExp;
+    return new Where(this.jar);
+
+  }
+
+  and(){
+    return this.createDeferredExpression("AND");
+  }
+  
+  or(){
+    return this.createDeferredExpression("OR");
+  }
+
+  andSubExpression(){
+    this.and();
+    let subExp = new N('deferred', this.jar.pointer);
+    subExp.meta = 'sub-exp';
+    this.jar.pointer.left = subExp;
+    this.jar.pointer = subExp;
+    return new Where(this.jar);
   }
 }
 
 
 
+const foo = new FluentJar().init()
+  .field("foo").equals("Bar")
+  .andSubExpression()
+     .field("one").equals("two")
+     .or().field("fdsa").equals("fice");
 
-new WhereJar().field("Foo").equals().value("Bar")
-  .and().field("foo2").equals().value("Bar2")
-  .or().field("POP").equals().value("OPP");
+console.log(foo.jar.root);
+console.log(foo.jar.shatter());
 
-console.log(root);
-inOrder(root);
 /*
 const expFoo = new N("=");
 expFoo.left = new N("Foo");
